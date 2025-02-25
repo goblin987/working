@@ -607,15 +607,21 @@ async def barygos(update: telegram.Update, context: telegram.ext.ContextTypes.DE
     if last_addftbaryga2_message:
         message += f"{last_addftbaryga2_message}\n\n"
     
-    weekly_board = "🏆 Savaitės Top Pardavėjai 🏆\n"
+    # Weekly leaderboard - all sellers with points
+    weekly_board = "🏆 Savaitės Pardavėjai 🏆\n"
     if not votes_weekly:
         weekly_board += "Dar nėra balsų šią savaitę!\n"
     else:
         sorted_weekly = sorted(votes_weekly.items(), key=lambda x: x[1], reverse=True)
-        for vendor, score in sorted_weekly[:3]:
-            weekly_board += f"{vendor}: {score}\n"
+        weekly_non_zero = [(vendor, score) for vendor, score in sorted_weekly if score > 0]
+        if not weekly_non_zero:
+            weekly_board += "Nėra pardavėjų su taškais šią savaitę!\n"
+        else:
+            for vendor, score in weekly_non_zero:
+                weekly_board += f"{vendor}: {score}\n"
     
-    monthly_board = "📅 Mėnesio Top Pardavėjai 📅\n"
+    # Monthly leaderboard - all sellers with points in the last 30 days
+    monthly_board = "📅 Mėnesio Pardavėjai 📅\n"
     monthly_totals = defaultdict(int)
     for vendor, votes_list in votes_monthly.items():
         votes_list[:] = [(ts, s) for ts, s in votes_list if now - ts < timedelta(days=30)]
@@ -624,16 +630,25 @@ async def barygos(update: telegram.Update, context: telegram.ext.ContextTypes.DE
         monthly_board += "Nėra balsų per 30 dienų!\n"
     else:
         sorted_monthly = sorted(monthly_totals.items(), key=lambda x: x[1], reverse=True)
-        for vendor, score in sorted_monthly[:3]:
-            monthly_board += f"{vendor}: {score}\n"
+        monthly_non_zero = [(vendor, score) for vendor, score in sorted_monthly if score > 0]
+        if not monthly_non_zero:
+            monthly_board += "Nėra pardavėjų su taškais per 30 dienų!\n"
+        else:
+            for vendor, score in monthly_non_zero:
+                monthly_board += f"{vendor}: {score}\n"
     
-    alltime_board = "🌟 Visų Laikų Top 5 Pardavėjai 🌟\n"
+    # All-time leaderboard - all sellers with points
+    alltime_board = "🌟 Visų Laikų Pardavėjai 🌟\n"
     if not votes_alltime:
         alltime_board += "Dar nėra balsų!\n"
     else:
         sorted_alltime = sorted(votes_alltime.items(), key=lambda x: x[1], reverse=True)
-        for i, (vendor, score) in enumerate(sorted_alltime[:5], 1):
-            alltime_board += f"{i}. {vendor}: {score}\n"
+        alltime_non_zero = [(vendor, score) for vendor, score in sorted_alltime if score > 0]
+        if not alltime_non_zero:
+            alltime_board += "Nėra pardavėjų su taškais!\n"
+        else:
+            for i, (vendor, score) in enumerate(alltime_non_zero, 1):
+                alltime_board += f"{i}. {vendor}: {score}\n"
     
     full_message = f"{message}{weekly_board}\n{monthly_board}\n{alltime_board}"
     if barygos_media_id and barygos_media_type:
