@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 logger.info(f"Running on Python {sys.version}")
 
 # Get sensitive information from environment variables
-TOKEN = os.getenv('TELEGRAM_TOKEN')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID')
 GROUP_CHAT_ID = os.getenv('GROUP_CHAT_ID')
 PASSWORD = os.getenv('PASSWORD', 'shoebot123')  # Default password or fetch from env if needed
