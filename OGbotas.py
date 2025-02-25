@@ -1,3 +1,4 @@
+import os
 import telegram
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -11,56 +12,48 @@ import random
 import logging
 import asyncio
 import pickle
-import os
 import sys
 
-# Configure logging
+# Logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 logger.info(f"Running on Python {sys.version}")
 
-# Get sensitive information from environment variables
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+# Load environment variables
+TOKEN = os.getenv('TELEGRAM_TOKEN')
 ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID')
 GROUP_CHAT_ID = os.getenv('GROUP_CHAT_ID')
-PASSWORD = os.getenv('PASSWORD', 'shoebot123')  # Default password or fetch from env if needed
-
-# Check if required environment variables are set
-if not TOKEN:
-    logger.error("TELEGRAM_TOKEN environment variable is not set.")
-    sys.exit(1)
-if not ADMIN_CHAT_ID:
-    logger.error("ADMIN_CHAT_ID environment variable is not set.")
-    sys.exit(1)
-if not GROUP_CHAT_ID:
-    logger.error("GROUP_CHAT_ID environment variable is not set.")
-    sys.exit(1)
-
-# Constants
+PASSWORD = os.getenv('BOT_PASSWORD')
+COINFLIP_STICKER_ID = os.getenv('COINFLIP_STICKER_ID', 'CAACAgIAAxkBAAEN32tnuPb-ovynJR5WNO1TQyv_ea17DwAC-RkAAtswEEqAzfrZRd8B1zYE')
 TIMEZONE = pytz.timezone('Europe/Vilnius')
-COINFLIP_STICKER_ID = 'CAACAgIAAxkBAAEN32tnuPb-ovynJR5WNO1TQyv_ea17DwAC-RkAAtswEEqAzfrZRd8B1zYE'
 
-# Data loading and saving functions
+# Ensure TOKEN is set
+if not TOKEN:
+    raise ValueError("TELEGRAM_TOKEN environment variable is not set!")
+
+# Data persistence functions using /data directory for Render disk
 def load_data(filename, default):
+    filepath = os.path.join('/data', filename)
     try:
-        if os.path.exists(filename) and os.path.getsize(filename) > 0:
-            with open(filename, 'rb') as f:
+        if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+            with open(filepath, 'rb') as f:
                 return pickle.load(f)
         return default
     except (FileNotFoundError, EOFError, pickle.UnpicklingError):
         return default
 
 def save_data(data, filename):
+    filepath = os.path.join('/data', filename)
     if isinstance(data, defaultdict):
         data = dict(data)
     try:
-        with open(filename, 'wb') as f:
+        with open(filepath, 'wb') as f:
             pickle.dump(data, f)
-        logger.info(f"Saved data to {filename}")
+        logger.info(f"Saved data to {filepath}")
     except Exception as e:
-        logger.error(f"Failed to save {filename}: {str(e)}")
+        logger.error(f"Failed to save {filepath}: {str(e)}")
 
-# Load initial data
+# Initial data loading
 featured_media_id = load_data('featured_media_id.pkl', None)
 featured_media_type = load_data('featured_media_type.pkl', None)
 barygos_media_id = load_data('barygos_media_id.pkl', None)
@@ -89,7 +82,7 @@ async def configure_scheduler(application):
 application = Application.builder().token(TOKEN).post_init(configure_scheduler).build()
 logger.info("Bot initialized")
 
-# Data structures
+# Initial data structures
 trusted_sellers = ['@Seller1', '@Seller2', '@Seller3']
 votes_weekly = load_data('votes_weekly.pkl', defaultdict(int))
 votes_monthly = load_data('votes_monthly.pkl', defaultdict(list))
@@ -241,7 +234,7 @@ async def balsuoju(update: telegram.Update, context: telegram.ext.ContextTypes.D
 
     keyboard = [[InlineKeyboardButton(seller, callback_data=f"vote_{seller}")] for seller in trusted_sellers]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    if 'featured_media_id' in globals() and featured_media_id and featured_media_type:
+    if featured_media_id and featured_media_type:
         if featured_media_type == 'photo':
             await context.bot.send_photo(chat_id=chat_id, photo=featured_media_id, caption=pardavejai_message, reply_markup=reply_markup)
         elif featured_media_type == 'animation':
@@ -381,7 +374,6 @@ async def handle_vote_button(update: telegram.Update, context: telegram.ext.Cont
     votes_weekly.setdefault(seller, 0)
     votes_alltime.setdefault(seller, 0)
     votes_monthly.setdefault(seller, [])
-    vote_history.setdefault(seller, [])
 
     logger.info(f"Before vote: user_id={user_id}, points={user_points[user_id]}, votes_weekly[{seller}]={votes_weekly[seller]}, votes_alltime[{seller}]={votes_alltime[seller]}")
 
@@ -644,7 +636,7 @@ async def barygos(update: telegram.Update, context: telegram.ext.ContextTypes.DE
             alltime_board += f"{i}. {vendor}: {score}\n"
     
     full_message = f"{message}{weekly_board}\n{monthly_board}\n{alltime_board}"
-    if 'barygos_media_id' in globals() and barygos_media_id and barygos_media_type:
+    if barygos_media_id and barygos_media_type:
         if barygos_media_type == 'photo':
             await context.bot.send_photo(chat_id=chat_id, photo=barygos_media_id, caption=full_message)
         elif barygos_media_type == 'animation':
@@ -688,7 +680,7 @@ async def handle_message(update: telegram.Update, context: telegram.ext.ContextT
     today = datetime.now(TIMEZONE)
     daily_messages[user_id][today.date()] += 1
     weekly_messages[user_id] += 1
-    alltime_messages.setdefault(user_id, 0)  # Ensure key exists with default 0
+    alltime_messages.setdefault(user_id, 0)
     alltime_messages[user_id] += 1
     
     yesterday = today - timedelta(days=1)
