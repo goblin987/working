@@ -263,22 +263,19 @@ async def balsuoju(update: telegram.Update, context: telegram.ext.ContextTypes.D
 
     keyboard = [[InlineKeyboardButton(seller, callback_data=f"vote_{seller}")] for seller in trusted_sellers]
     reply_markup = InlineKeyboardMarkup(keyboard)
-
-    try:
+    if 'featured_media_id' in globals() and featured_media_id and featured_media_type:
         if featured_media_type == 'photo':
-            msg = await context.bot.send_photo(chat_id=user_id, photo=featured_media_id, caption=pardavejai_message, reply_markup=reply_markup)
+            msg = await context.bot.send_photo(chat_id=chat_id, photo=featured_media_id, caption=pardavejai_message, reply_markup=reply_markup)
         elif featured_media_type == 'animation':
-            msg = await context.bot.send_animation(chat_id=user_id, animation=featured_media_id, caption=pardavejai_message, reply_markup=reply_markup)
+            msg = await context.bot.send_animation(chat_id=chat_id, animation=featured_media_id, caption=pardavejai_message, reply_markup=reply_markup)
         elif featured_media_type == 'video':
-            msg = await context.bot.send_video(chat_id=user_id, video=featured_media_id, caption=pardavejai_message, reply_markup=reply_markup)
-        else:
-            msg = await context.bot.send_message(chat_id=user_id, text=pardavejai_message, reply_markup=reply_markup)
-        # Store message ID in context for later deletion
-        context.user_data['balsuoju_message_id'] = (msg.chat_id, msg.message_id)
-        logger.info(f"/balsuoju called by user_id={user_id}, buttons sent privately, message_id={msg.message_id}")
-    except telegram.error.Unauthorized:
-        msg = await context.bot.send_message(chat_id=chat_id, text="Please start a conversation with me privately by sending /start to vote.")
-        context.job_queue.run_once(delete_message_job, 45, context=(chat_id, msg.message_id))
+            msg = await context.bot.send_video(chat_id=chat_id, video=featured_media_id, caption=pardavejai_message, reply_markup=reply_markup)
+    else:
+        msg = await context.bot.send_message(chat_id=chat_id, text=pardavejai_message, reply_markup=reply_markup)
+    
+    # Store the message ID in context.user_data for later deletion
+    context.user_data[f'balsuoju_message_{user_id}'] = (chat_id, msg.message_id)
+    logger.info(f"/balsuoju called by user_id={user_id} in chat_id={chat_id}, buttons sent to group, message_id={msg.message_id}")
 
 async def addftbaryga(update: telegram.Update, context: telegram.ext.ContextTypes.DEFAULT_TYPE) -> None:
     user_id = str(update.message.from_user.id)
@@ -393,7 +390,7 @@ async def handle_vote_button(update: telegram.Update, context: telegram.ext.Cont
         logger.error(f"Message is None for user_id={user_id}, callback_data={query.data}")
         return
     
-    chat_id = query.message.chat_id  # This will be the private chat_id
+    chat_id = query.message.chat_id  # This is the group chat_id
     data = query.data
 
     logger.info(f"Vote attempt by user_id={user_id} in chat_id={chat_id}, callback_data={data}")
@@ -407,10 +404,10 @@ async def handle_vote_button(update: telegram.Update, context: telegram.ext.Cont
         await query.answer("Šis pardavėjas nebegalioja!")
         logger.warning(f"Attempt to vote for invalid seller '{seller}' by user_id={user_id}. Trusted sellers: {trusted_sellers}")
         # Delete the message even if the seller is invalid
-        if 'balsuoju_message_id' in context.user_data:
-            chat_id, message_id = context.user_data['balsuoju_message_id']
+        if f'balsuoju_message_{user_id}' in context.user_data:
+            chat_id, message_id = context.user_data[f'balsuoju_message_{user_id}']
             context.job_queue.run_once(delete_message_job, 5, context=(chat_id, message_id))
-            del context.user_data['balsuoju_message_id']
+            del context.user_data[f'balsuoju_message_{user_id}']
         return
 
     now = datetime.now(TIMEZONE)
@@ -419,12 +416,12 @@ async def handle_vote_button(update: telegram.Update, context: telegram.ext.Cont
     if cooldown_remaining > timedelta(0):
         days_left = max(1, int(cooldown_remaining.total_seconds() // 86400))
         await query.answer(f"Tu jau balsavai! Liko {days_left} dienų iki kito balsavimo.")
-        await context.bot.send_message(chat_id=chat_id, text=f"Tu jau balsavai! Liko {days_left} dienų iki kito balsavimo.")
+        await context.bot.send_message(chat_id=chat_id, text=f"@{query.from_user.username or 'User' + str(user_id)}, tu jau balsavai! Liko {days_left} dienų iki kito balsavimo.")
         # Delete the balsuoju message after showing cooldown
-        if 'balsuoju_message_id' in context.user_data:
-            chat_id, message_id = context.user_data['balsuoju_message_id']
+        if f'balsuoju_message_{user_id}' in context.user_data:
+            chat_id, message_id = context.user_data[f'balsuoju_message_{user_id}']
             context.job_queue.run_once(delete_message_job, 5, context=(chat_id, message_id))
-            del context.user_data['balsuoju_message_id']
+            del context.user_data[f'balsuoju_message_{user_id}']
         logger.info(f"User_id={user_id} blocked by cooldown, {days_left} days left.")
         return
 
@@ -449,10 +446,10 @@ async def handle_vote_button(update: telegram.Update, context: telegram.ext.Cont
     await query.edit_message_text(f"Ačiū už jūsų balsą už {seller}, 5 taškai pridėti!")
     
     # Delete the balsuoju message after successful vote
-    if 'balsuoju_message_id' in context.user_data:
-        chat_id, message_id = context.user_data['balsuoju_message_id']
+    if f'balsuoju_message_{user_id}' in context.user_data:
+        chat_id, message_id = context.user_data[f'balsuoju_message_{user_id}']
         context.job_queue.run_once(delete_message_job, 5, context=(chat_id, message_id))
-        del context.user_data['balsuoju_message_id']
+        del context.user_data[f'balsuoju_message_{user_id}']
     
     save_data(votes_weekly, 'votes_weekly.pkl')
     save_data(votes_monthly, 'votes_monthly.pkl')
@@ -1024,10 +1021,10 @@ application.job_queue.scheduler.add_job(
     reset_votes, CronTrigger(day_of_week='mon', hour=0, minute=0, timezone=TIMEZONE), args=[application], id='reset_votes_weekly'
 )
 
-if __name__ == '__main__':  
-    try:  
-        logger.info("Starting bot polling...")  
-        application.run_polling()  
-    except Exception as e:  
-        logger.error(f"Polling failed: {str(e)}")  
-    logger.info("Bot polling stopped.")  
+if __name__ == '__main__':
+    try:
+        logger.info("Starting bot polling...")
+        application.run_polling()
+    except Exception as e:
+        logger.error(f"Polling failed: {str(e)}")
+    logger.info("Bot polling stopped.")
